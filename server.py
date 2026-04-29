@@ -123,42 +123,72 @@ def _extract_text(obj) -> str:
     return ""
 
 
+def _is_final_segment(obj: dict) -> bool:
+    """Returns False for RTASR interim segments (cn.st.type=0) to avoid duplicates."""
+    if not isinstance(obj, dict):
+        return True
+    cn = obj.get("cn")
+    if cn is None:
+        data = obj.get("data")
+        if isinstance(data, dict):
+            cn = data.get("cn")
+    if isinstance(cn, dict):
+        st = cn.get("st", {})
+        if isinstance(st, dict) and "type" in st:
+            return str(st.get("type")) == "1"
+    return True
+
+
 # ─── RTASR 识别 ───────────────────────────────────────────────────────────────
 
 async def recognize_audio(audio_bytes: bytes) -> str:
     url = build_rtasr_url()
     logger.info("Connecting to RTASR ...")
 
-    texts = []
+    # last_text: 最近一次非 ls=true 的识别文字（最完整的中间结果）
+    # ls_addition: ls=true 消息带来的文字（可能是完整句，也可能只是末尾标点）
+    last_text = ""
+    ls_addition = ""
     session_id = None
     done = asyncio.Event()
+
+    def _get_ls(obj: dict) -> bool:
+        d = obj.get("data")
+        if isinstance(d, dict):
+            return bool(d.get("ls"))
+        return False
 
     try:
         async with websockets.connect(url, ping_interval=None, open_timeout=15) as ws:
             logger.info("RTASR connected, waiting for server ready ...")
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(0.5)
 
             async def recv_loop():
-                nonlocal session_id
+                nonlocal session_id, last_text, ls_addition
                 try:
                     async for msg in ws:
                         if not isinstance(msg, str):
                             continue
-                        logger.info(f"RTASR ← {msg[:300]}")
                         try:
                             data = json.loads(msg)
                         except Exception:
+                            logger.info(f"RTASR ← [non-JSON] {msg[:300]}")
                             continue
-                        # session id
+                        logger.info(f"RTASR ← RAW: {json.dumps(data, ensure_ascii=False)}")
                         d = data.get("data")
                         if (data.get("msg_type") == "action"
                                 and isinstance(d, dict) and "sessionId" in d):
                             session_id = d["sessionId"]
-                        # text
-                        text = _extract_text(data)
-                        if text:
-                            texts.append(text)
-                            logger.info(f"Recognized segment: {text}")
+                        extracted = _extract_text(data)
+                        is_ls = _get_ls(data)
+                        logger.info(f"RTASR ← ls={is_ls} extracted='{extracted}'")
+                        if is_ls:
+                            ls_addition = extracted
+                            logger.info(f"RTASR ← LS addition: '{ls_addition}'")
+                        elif extracted:
+                            # 只保留更长的结果（防止滚动窗口把文字变短）
+                            if len(extracted) >= len(last_text):
+                                last_text = extracted
                 except websockets.ConnectionClosed:
                     pass
                 finally:
@@ -200,7 +230,12 @@ async def recognize_audio(audio_bytes: bytes) -> str:
     except Exception as e:
         logger.error(f"RTASR error: {e}")
 
-    result = "".join(texts)
+    if len(ls_addition) >= len(last_text):
+        # ls=true 带来了完整句子（比之前的更长），直接用它
+        result = ls_addition
+    else:
+        # ls=true 只是末尾补充（如标点），拼到前一条后面
+        result = last_text + ls_addition
     logger.info(f"Final recognized text: '{result}'")
     return result
 
@@ -279,7 +314,7 @@ async def synthesize_speech(text: str) -> bytes:
                 "business": {
                     "aue":    "raw",
                     "auf":    "audio/L16;rate=16000",
-                    "vcn":    "xiaoyan",
+                    "vcn":    "x4_yezi",
                     "speed":  50,
                     "volume": 50,
                     "pitch":  50,
@@ -411,7 +446,7 @@ def _start_http():
 async def main():
     threading.Thread(target=_start_http, daemon=True).start()
     logger.info("WebSocket server → ws://localhost:8765")
-    async with websockets.serve(handle_client, "0.0.0.0", 8765):
+    async with websockets.serve(handle_client, "0.0.0.0", 8765, ping_interval=None):
         await asyncio.Future()
 
 

@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>语音对话 Demo</title>
+  <title>语音通话</title>
 
-  <!-- React 18 + Babel (CDN，无需工程化) -->
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -14,64 +13,88 @@
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
-      background: #f0f2f5;
+      background: #1c1c1e;
+      min-height: 100vh;
+      color: #fff;
+    }
+    #root {
+      display: flex; flex-direction: column; align-items: center;
+      max-width: 480px; margin: 0 auto; padding: 24px 16px 48px; gap: 16px;
       min-height: 100vh;
     }
-    #root { display: flex; flex-direction: column; align-items: center;
-            max-width: 600px; margin: 0 auto; padding: 28px 16px 48px; gap: 16px; }
 
-    h1 { font-size: 22px; font-weight: 700; color: #1a1a1a; }
+    h1 { font-size: 18px; font-weight: 600; color: #ebebf5cc; letter-spacing: .5px; }
 
     .chat-box {
-      width: 100%; background: #fff; border-radius: 18px; padding: 16px;
-      min-height: 320px; max-height: 440px; overflow-y: auto;
-      box-shadow: 0 2px 16px rgba(0,0,0,.07);
+      width: 100%; flex: 1;
+      background: #2c2c2e; border-radius: 18px; padding: 14px;
+      min-height: 260px; max-height: 380px; overflow-y: auto;
       display: flex; flex-direction: column; gap: 10px;
     }
-    .msg { max-width: 76%; padding: 10px 14px; border-radius: 14px;
+    .msg { max-width: 78%; padding: 10px 14px; border-radius: 14px;
            font-size: 15px; line-height: 1.55; word-break: break-word; white-space: pre-wrap; }
-    .msg.bot  { background: #e9e9ec; color: #1a1a1a; align-self: flex-start; }
-    .msg.user { background: #007aff; color: #fff;     align-self: flex-end; }
+    .msg.bot  { background: #3a3a3c; color: #f2f2f7; align-self: flex-start; }
+    .msg.user { background: #0a84ff; color: #fff;    align-self: flex-end; }
 
-    .viz-wrap { width: 100%; border-radius: 12px; overflow: hidden; background: #1c1c1e; }
-    canvas    { width: 100%; height: 56px; display: block; }
+    /* 波形 */
+    .viz-wrap { width: 100%; border-radius: 12px; overflow: hidden; }
+    canvas    { width: 100%; height: 52px; display: block; }
 
-    .record-btn {
-      width: 148px; height: 148px; border-radius: 50%; border: none;
-      background: #007aff; color: #fff; font-size: 15px; font-weight: 600;
-      cursor: pointer; box-shadow: 0 4px 24px rgba(0,122,255,.38);
+    /* 状态指示 */
+    .phase-row {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; color: #ebebf5aa; min-height: 22px;
+    }
+    .phase-dot {
+      width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+      background: #636366; transition: background .3s;
+    }
+    .phase-dot.connected  { background: #34c759; }
+    .phase-dot.speaking   { background: #ff9f0a; animation: blink .7s ease-in-out infinite; }
+    .phase-dot.processing { background: #0a84ff; animation: blink .7s ease-in-out infinite; }
+    .phase-dot.playing    { background: #30d158; animation: blink .7s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* 通话按钮 */
+    .call-btn {
+      width: 76px; height: 76px; border-radius: 50%; border: none;
+      font-size: 28px; cursor: pointer;
       transition: transform .12s, background .15s, box-shadow .15s;
-      user-select: none; -webkit-user-select: none; touch-action: none;
     }
-    .record-btn:disabled { opacity: .45; cursor: not-allowed; }
-    .record-btn.recording {
-      background: #ff3b30; box-shadow: 0 4px 24px rgba(255,59,48,.45);
-      animation: pulse 1s ease-in-out infinite;
+    .call-btn.answer {
+      background: #34c759;
+      box-shadow: 0 4px 20px rgba(52,199,89,.45);
     }
-    @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.06)} }
+    .call-btn.answer:hover { transform: scale(1.06); }
+    .call-btn.hangup {
+      background: #ff3b30;
+      box-shadow: 0 4px 20px rgba(255,59,48,.45);
+      animation: pulse-red 1.8s ease-in-out infinite;
+    }
+    @keyframes pulse-red { 0%,100%{box-shadow:0 4px 20px rgba(255,59,48,.45)} 50%{box-shadow:0 4px 32px rgba(255,59,48,.75)} }
+    .call-btn:disabled { opacity: .4; cursor: not-allowed; animation: none; }
 
-    .status-bar { display: flex; align-items: center; gap: 6px;
-                  font-size: 13px; color: #666; min-height: 20px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc;
-           flex-shrink: 0; transition: background .3s; }
-    .dot.ok { background: #34c759; }
+    .call-label { font-size: 13px; color: #ebebf5aa; }
   </style>
 </head>
 <body>
 <div id="root"></div>
 
-<!-- AudioWorklet Processor (Blob URL — 避免单文件跨域限制) -->
+<!-- AudioWorklet: 返回 PCM + RMS，方便 VAD -->
 <script id="worklet-src" type="text/plain">
 class PCMProcessor extends AudioWorkletProcessor {
   process(inputs) {
     const ch = inputs[0][0];
     if (ch && ch.length) {
       const i16 = new Int16Array(ch.length);
+      let sum = 0;
       for (let i = 0; i < ch.length; i++) {
         const s = Math.max(-1, Math.min(1, ch[i]));
         i16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        sum += s * s;
       }
-      this.port.postMessage(i16.buffer, [i16.buffer]);
+      const rms = Math.sqrt(sum / ch.length);
+      this.port.postMessage({ pcm: i16.buffer, rms }, [i16.buffer]);
     }
     return true;
   }
@@ -82,16 +105,19 @@ registerProcessor("pcm-processor", PCMProcessor);
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
 
-const WS_URL      = "ws://localhost:8765";
-const SAMPLE_RATE = 16000;
+const WS_URL          = "ws://localhost:8765";
+const SAMPLE_RATE     = 16000;
+const SPEAK_THRESHOLD = 0.015;   // RMS 阈值：超过即判为说话
+const SILENCE_MS      = 500;     // 停顿多久触发发送
+const MIN_SPEECH_MS   = 200;     // 最短有效说话时长（过滤噪音）
 
 /* ── PCM 播放 ─────────────────────────────────────────────────────────────── */
 function playPCM(b64, sr) {
-  const bin   = atob(b64);
+  const bin  = atob(b64);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const ac = new AudioContext({ sampleRate: sr });
-  const n  = bytes.length / 2;
+  const ac  = new AudioContext({ sampleRate: sr });
+  const n   = bytes.length / 2;
   const f32 = new Float32Array(n);
   const dv  = new DataView(bytes.buffer);
   for (let i = 0; i < n; i++) f32[i] = dv.getInt16(i * 2, true) / 32768;
@@ -105,17 +131,16 @@ function playPCM(b64, sr) {
 }
 
 /* ── 波形可视化 ────────────────────────────────────────────────────────────── */
-function Visualizer({ analyserRef, recording }) {
+function Visualizer({ analyserRef, phase }) {
   const cvs = useRef(null);
   const raf = useRef(null);
-
   useEffect(() => {
     const canvas = cvs.current;
-    const ctx    = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
     function draw() {
       raf.current = requestAnimationFrame(draw);
       const w = canvas.width  = canvas.offsetWidth;
-      const h = canvas.height = 56;
+      const h = canvas.height = 52;
       ctx.fillStyle = "#1c1c1e";
       ctx.fillRect(0, 0, w, h);
       const a = analyserRef.current;
@@ -123,52 +148,64 @@ function Visualizer({ analyserRef, recording }) {
       const data = new Uint8Array(a.frequencyBinCount);
       a.getByteFrequencyData(data);
       const bw = (w / data.length) * 2.5;
-      ctx.fillStyle = recording ? "#ff3b30" : "#007aff";
+      ctx.fillStyle = phase === "speaking" ? "#ff9f0a"
+                    : phase === "playing"  ? "#30d158"
+                    :                        "#0a84ff";
       let x = 0;
       for (let i = 0; i < data.length; i++) {
-        ctx.fillRect(x, h - (data[i] / 255) * h, bw, (data[i] / 255) * h);
+        const h2 = (data[i] / 255) * h;
+        ctx.fillRect(x, h - h2, bw, h2);
         x += bw + 1;
       }
     }
     draw();
     return () => cancelAnimationFrame(raf.current);
-  }, [analyserRef, recording]);
-
-  return (
-    <div className="viz-wrap">
-      <canvas ref={cvs} />
-    </div>
-  );
+  }, [analyserRef, phase]);
+  return <div className="viz-wrap"><canvas ref={cvs} /></div>;
 }
 
 /* ── 主应用 ────────────────────────────────────────────────────────────────── */
 function App() {
-  const [connected,  setConnected]  = useState(false);
-  const [recording,  setRecording]  = useState(false);
-  const [status,     setStatus]     = useState("正在连接服务器...");
-  const [messages,   setMessages]   = useState([
-    { id: 0, role: "bot", text: "你好！按住下方按钮说话，松开后自动识别并回复。" },
+  const [connected, setConnected] = useState(false);
+  const [callActive, setCallActive] = useState(false);
+  const [phase, setPhase] = useState("idle");
+  // phase: idle | listening | speaking | processing | playing
+  const [status, setStatus] = useState("等待连接...");
+  const [messages, setMessages] = useState([
+    { id: 0, role: "bot", text: "点击「接听」开始语音通话，说完话停顿 0.5 秒自动发送。" },
   ]);
 
-  const wsRef        = useRef(null);
-  const audioCtxRef  = useRef(null);
-  const streamRef    = useRef(null);
-  const workletRef   = useRef(null);
-  const analyserRef  = useRef(null);
-  const recordingRef = useRef(false);
-  const chatEndRef   = useRef(null);
+  const wsRef          = useRef(null);
+  const audioCtxRef    = useRef(null);
+  const streamRef      = useRef(null);
+  const workletRef     = useRef(null);
+  const analyserRef    = useRef(null);
+  const chatEndRef     = useRef(null);
+
+  // VAD refs（在回调中用 ref，避免闭包陷阱）
+  const phaseRef          = useRef("idle");
+  const callActiveRef     = useRef(false);
+  const audioBufferRef    = useRef([]);
+  const silenceTimerRef   = useRef(null);
+  const speechStartRef    = useRef(0);
+  const lastSpeechTimeRef = useRef(0);
+
+  const _setPhase = (p) => { phaseRef.current = p; setPhase(p); };
 
   const addMsg = useCallback((role, text) => {
     setMessages(prev => [...prev, { id: Date.now() + Math.random(), role, text }]);
   }, []);
 
-  /* WebSocket */
+  /* ── WebSocket ─────────────────────────────────────────────────────────── */
   const connect = useCallback(() => {
     if (wsRef.current) return;
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
-    ws.onopen = () => { setConnected(true); setStatus("已连接，按住按钮开始录音"); };
+    ws.onopen = () => {
+      setConnected(true);
+      setStatus("已连接，点击接听开始通话");
+    };
 
     ws.onmessage = async (e) => {
       const msg = JSON.parse(e.data);
@@ -177,19 +214,26 @@ function App() {
       } else if (msg.type === "text") {
         addMsg(msg.role ?? "user", msg.text);
       } else if (msg.type === "audio") {
-        addMsg("bot", "🔊 正在播放语音回复...");
-        setStatus("正在播放...");
+        _setPhase("playing");
+        setStatus("AI 回复中...");
         await playPCM(msg.data, msg.sampleRate || 16000);
-        setStatus("已连接，按住按钮开始录音");
+        // 播放完毕，回到监听
+        if (callActiveRef.current) {
+          _setPhase("listening");
+          setStatus("正在聆听...");
+        }
       } else if (msg.type === "error") {
         setStatus("⚠️ " + msg.message);
+        if (callActiveRef.current) {
+          _setPhase("listening");
+        }
       }
     };
 
     ws.onclose = () => {
       wsRef.current = null;
       setConnected(false);
-      setStatus("连接断开，5秒后重连...");
+      setStatus("连接断开，5 秒后重连...");
       setTimeout(connect, 5000);
     };
     ws.onerror = () => ws.close();
@@ -200,25 +244,35 @@ function App() {
     return () => wsRef.current?.close();
   }, [connect]);
 
-  /* 自动滚到底部 */
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  /* document 级 mouseup / touchend，松开在任意位置都能停止 */
-  useEffect(() => {
-    const up = () => stopRecording();
-    document.addEventListener("mouseup",  up);
-    document.addEventListener("touchend", up);
-    return () => {
-      document.removeEventListener("mouseup",  up);
-      document.removeEventListener("touchend", up);
-    };
-  }, []);   // stopRecording 用 ref，不需要列为依赖
+  /* ── 发送音频 ──────────────────────────────────────────────────────────── */
+  function triggerSend() {
+    if (!callActiveRef.current) return;
+    const buf = audioBufferRef.current;
+    audioBufferRef.current = [];
 
-  /* 开始录音 */
-  async function startRecording() {
-    if (recordingRef.current) return;
+    const total = buf.reduce((s, a) => s + a.length, 0);
+    if (total === 0) { _setPhase("listening"); return; }
+
+    const combined = new Int16Array(total);
+    let off = 0;
+    for (const arr of buf) { combined.set(arr, off); off += arr.length; }
+
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(combined.buffer);
+      ws.send(JSON.stringify({ type: "end" }));
+      _setPhase("processing");
+      setStatus("识别中...");
+    }
+  }
+
+  /* ── 开始通话 ──────────────────────────────────────────────────────────── */
+  async function startCall() {
+    if (callActiveRef.current) return;
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) { setStatus("未连接，请稍候"); return; }
 
@@ -239,7 +293,6 @@ function App() {
       src.connect(analyser);
       analyserRef.current = analyser;
 
-      /* AudioWorklet — 通过 Blob URL 内联，绕过单文件跨域限制 */
       const code    = document.getElementById("worklet-src").textContent;
       const blob    = new Blob([code], { type: "application/javascript" });
       const blobURL = URL.createObjectURL(blob);
@@ -248,42 +301,101 @@ function App() {
 
       const worklet = new AudioWorkletNode(ac, "pcm-processor");
       worklet.port.onmessage = (ev) => {
-        if (!recordingRef.current) return;
-        if (ws.readyState === WebSocket.OPEN) ws.send(ev.data);
+        if (!callActiveRef.current) return;
+        const p = phaseRef.current;
+        if (p === "processing" || p === "playing") return;
+
+        const { pcm, rms } = ev.data;
+        const pcmArr = new Int16Array(pcm);
+        const now    = Date.now();
+
+        if (rms > SPEAK_THRESHOLD) {
+          // 检测到说话
+          if (p === "listening") {
+            speechStartRef.current  = now;
+            lastSpeechTimeRef.current = now;
+            _setPhase("speaking");
+          } else {
+            lastSpeechTimeRef.current = now;
+          }
+          audioBufferRef.current.push(pcmArr);
+          // 重置静音计时器
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+            silenceTimerRef.current = null;
+          }
+        } else if (p === "speaking") {
+          // 静音，但正在说话状态
+          audioBufferRef.current.push(pcmArr);
+          if (!silenceTimerRef.current) {
+            silenceTimerRef.current = setTimeout(() => {
+              silenceTimerRef.current = null;
+              if (!callActiveRef.current) return;
+              const dur = lastSpeechTimeRef.current - speechStartRef.current;
+              if (dur >= MIN_SPEECH_MS) {
+                triggerSend();
+              } else {
+                // 太短，丢弃（噪音）
+                audioBufferRef.current = [];
+                _setPhase("listening");
+              }
+            }, SILENCE_MS);
+          }
+        }
       };
+
       src.connect(worklet);
-      worklet.connect(ac.destination);
       workletRef.current = worklet;
 
-      recordingRef.current = true;
-      setRecording(true);
-      setStatus("录音中...");
+      callActiveRef.current = true;
+      setCallActive(true);
+      _setPhase("listening");
+      setStatus("正在聆听...");
     } catch (err) {
       setStatus("麦克风错误：" + err.message);
     }
   }
 
-  /* 停止录音 */
-  function stopRecording() {
-    if (!recordingRef.current) return;
-    recordingRef.current = false;
-    setRecording(false);
+  /* ── 结束通话 ──────────────────────────────────────────────────────────── */
+  function endCall() {
+    callActiveRef.current = false;
+    setCallActive(false);
+    _setPhase("idle");
+
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    audioBufferRef.current = [];
 
     workletRef.current?.disconnect();  workletRef.current  = null;
     analyserRef.current?.disconnect(); analyserRef.current = null;
     audioCtxRef.current?.close();     audioCtxRef.current = null;
     streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null;
 
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "end" }));
-      setStatus("处理中...");
-    }
+    setStatus("已挂断，点击接听重新开始");
   }
+
+  /* ── 状态文案 ──────────────────────────────────────────────────────────── */
+  const phaseLabel = {
+    idle:       "未通话",
+    listening:  "正在聆听...",
+    speaking:   "说话中",
+    processing: "处理中...",
+    playing:    "AI 回复中...",
+  }[phase] ?? "";
+
+  const dotClass = {
+    idle:       connected ? "connected" : "",
+    listening:  "connected",
+    speaking:   "speaking",
+    processing: "processing",
+    playing:    "playing",
+  }[phase] ?? "";
 
   return (
     <>
-      <h1>🎙️ 语音对话 Demo</h1>
+      <h1>📞 语音通话</h1>
 
       <div className="chat-box">
         {messages.map(m => (
@@ -292,21 +404,22 @@ function App() {
         <div ref={chatEndRef} />
       </div>
 
-      <Visualizer analyserRef={analyserRef} recording={recording} />
+      <Visualizer analyserRef={analyserRef} phase={phase} />
+
+      <div className="phase-row">
+        <span className={`phase-dot ${dotClass}`} />
+        <span>{phaseLabel || status}</span>
+      </div>
 
       <button
-        className={`record-btn${recording ? " recording" : ""}`}
-        disabled={!connected}
-        onMouseDown={e => { e.preventDefault(); startRecording(); }}
-        onTouchStart={e => { e.preventDefault(); startRecording(); }}
+        className={`call-btn ${callActive ? "hangup" : "answer"}`}
+        disabled={!connected && !callActive}
+        onClick={callActive ? endCall : startCall}
+        title={callActive ? "挂断" : "接听"}
       >
-        {!connected ? "未连接" : recording ? "松开发送" : "按住说话"}
+        {callActive ? "📵" : "📞"}
       </button>
-
-      <div className="status-bar">
-        <span className={`dot${connected ? " ok" : ""}`} />
-        <span>{status}</span>
-      </div>
+      <span className="call-label">{callActive ? "挂断" : "接听"}</span>
     </>
   );
 }
